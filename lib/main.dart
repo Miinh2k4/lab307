@@ -39,21 +39,26 @@ class _IoTDeviceDashboardState extends State<IoTDeviceDashboard> {
 
   // ====================== FETCH DEVICES ======================
   Future<void> fetchDevices() async {
+    print(">>> [FETCH DEVICES] CALL: $_baseUrl/devices");
+
     try {
       final response = await http.get(Uri.parse('$_baseUrl/devices'));
+
+      print(">>> [FETCH DEVICES] STATUS = ${response.statusCode}");
+      print(">>> [FETCH DEVICES] BODY = ${response.body}");
+
       if (response.statusCode == 200) {
         final List list = json.decode(response.body);
         setState(() {
           _devices = list.map((json) => Device.fromJson(json)).toList();
 
-          // Mỗi device có 1 payload controller riêng
           for (var d in _devices) {
             _payloadControllers[d.id] ??= TextEditingController();
           }
         });
       }
     } catch (e) {
-      print("Fetch devices error: $e");
+      print(">>> [FETCH DEVICES] ERROR = $e");
     }
   }
 
@@ -61,6 +66,8 @@ class _IoTDeviceDashboardState extends State<IoTDeviceDashboard> {
   Future<void> createDevice() async {
     if (_deviceNameController.text.isEmpty ||
         _deviceTopicController.text.isEmpty) return;
+
+    print(">>> [CREATE DEVICE] CALLING");
 
     final response = await http.post(
       Uri.parse('$_baseUrl/devices'),
@@ -70,6 +77,9 @@ class _IoTDeviceDashboardState extends State<IoTDeviceDashboard> {
         'topic': _deviceTopicController.text,
       }),
     );
+
+    print(">>> [CREATE DEVICE] STATUS = ${response.statusCode}");
+    print(">>> [CREATE DEVICE] BODY = ${response.body}");
 
     if (response.statusCode == 200 || response.statusCode == 201) {
       _deviceNameController.clear();
@@ -82,11 +92,16 @@ class _IoTDeviceDashboardState extends State<IoTDeviceDashboard> {
   Future<void> controlDevice(int id) async {
     final payload = _payloadControllers[id]?.text ?? "";
 
+    print(">>> [CONTROL] DEVICE ID = $id");
+    print(">>> PAYLOAD = $payload");
+
     final response = await http.post(
       Uri.parse('$_baseUrl/devices/$id/control'),
       headers: {'Content-Type': 'text/plain'},
       body: payload,
     );
+
+    print(">>> [CONTROL] STATUS = ${response.statusCode}");
 
     if (response.statusCode == 200) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -97,16 +112,23 @@ class _IoTDeviceDashboardState extends State<IoTDeviceDashboard> {
 
   // ====================== FETCH TELEMETRY ======================
   Future<List<Telemetry>> fetchTelemetry(int deviceId) async {
+    final url = '$_baseUrl/telemetry/$deviceId';
+
+    print(">>> [FETCH TELEMETRY] CALLED FOR ID = $deviceId");
+    print(">>> [FETCH TELEMETRY] URL = $url");
+
     try {
-      final response =
-          await http.get(Uri.parse('$_baseUrl/telemetry/$deviceId'));
+      final response = await http.get(Uri.parse(url));
+
+      print(">>> [FETCH TELEMETRY] STATUS = ${response.statusCode}");
+      print(">>> [FETCH TELEMETRY] BODY = ${response.body}");
 
       if (response.statusCode == 200) {
         final List list = json.decode(response.body);
         return list.map((json) => Telemetry.fromJson(json)).toList();
       }
     } catch (e) {
-      print("Fetch telemetry error: $e");
+      print(">>> [FETCH TELEMETRY] ERROR = $e");
     }
 
     return [];
@@ -114,7 +136,11 @@ class _IoTDeviceDashboardState extends State<IoTDeviceDashboard> {
 
   // ====================== TELEMETRY POPUP ======================
   Future<void> _showTelemetryDialog(int deviceId, String deviceName) async {
+    print(">>> [SHOW POPUP] CLICKED FOR DEVICE = $deviceId");
+
     List<Telemetry> telemetries = await fetchTelemetry(deviceId);
+
+    print(">>> [SHOW POPUP] RECEIVED ${telemetries.length} ITEMS");
 
     showDialog(
       context: context,
@@ -165,7 +191,6 @@ class _IoTDeviceDashboardState extends State<IoTDeviceDashboard> {
 
             const SizedBox(height: 10),
 
-            // DEVICE CARDS
             ..._devices.map(
               (d) => Card(
                 elevation: 3,
@@ -183,11 +208,10 @@ class _IoTDeviceDashboardState extends State<IoTDeviceDashboard> {
 
                       const SizedBox(height: 10),
 
-                      // PAYLOAD
                       TextField(
                         controller: _payloadControllers[d.id],
-                        decoration: const InputDecoration(
-                            hintText: 'Lệnh điều khiển'),
+                        decoration:
+                            const InputDecoration(hintText: 'Lệnh điều khiển'),
                       ),
 
                       const SizedBox(height: 10),
@@ -195,17 +219,18 @@ class _IoTDeviceDashboardState extends State<IoTDeviceDashboard> {
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          // Gửi lệnh
                           ElevatedButton.icon(
                             onPressed: () => controlDevice(d.id),
                             icon: const Icon(Icons.send),
                             label: const Text("Gửi lệnh"),
                           ),
 
-                          // Xem dữ liệu
                           TextButton(
-                            onPressed: () =>
-                                _showTelemetryDialog(d.id, d.name),
+                            onPressed: () {
+                              print(
+                                  ">>> [BUTTON] XEM DỮ LIỆU pressed for device ${d.id}");
+                              _showTelemetryDialog(d.id, d.name);
+                            },
                             child: const Text("Xem dữ liệu"),
                           ),
                         ],
@@ -218,7 +243,6 @@ class _IoTDeviceDashboardState extends State<IoTDeviceDashboard> {
 
             const SizedBox(height: 20),
 
-            // ADD DEVICE
             const Text(
               '➕ Thêm thiết bị mới',
               style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
