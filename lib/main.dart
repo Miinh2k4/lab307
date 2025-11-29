@@ -23,12 +23,13 @@ class IoTDeviceDashboard extends StatefulWidget {
 }
 
 class _IoTDeviceDashboardState extends State<IoTDeviceDashboard> {
-  final _baseUrl = 'http://172.20.10.3:8080'; // đổi theo IP backend
+  final _baseUrl = 'http://172.20.10.3:8080';
+
   List<Device> _devices = [];
+  final Map<int, TextEditingController> _payloadControllers = {};
 
   final _deviceNameController = TextEditingController();
   final _deviceTopicController = TextEditingController();
-  final _payloadController = TextEditingController();
 
   @override
   void initState() {
@@ -44,6 +45,11 @@ class _IoTDeviceDashboardState extends State<IoTDeviceDashboard> {
         final List list = json.decode(response.body);
         setState(() {
           _devices = list.map((json) => Device.fromJson(json)).toList();
+
+          // Mỗi device có 1 payload controller riêng
+          for (var d in _devices) {
+            _payloadControllers[d.id] ??= TextEditingController();
+          }
         });
       }
     } catch (e) {
@@ -54,9 +60,7 @@ class _IoTDeviceDashboardState extends State<IoTDeviceDashboard> {
   // ====================== CREATE DEVICE ======================
   Future<void> createDevice() async {
     if (_deviceNameController.text.isEmpty ||
-        _deviceTopicController.text.isEmpty) {
-      return;
-    }
+        _deviceTopicController.text.isEmpty) return;
 
     final response = await http.post(
       Uri.parse('$_baseUrl/devices'),
@@ -76,25 +80,26 @@ class _IoTDeviceDashboardState extends State<IoTDeviceDashboard> {
 
   // ====================== CONTROL DEVICE ======================
   Future<void> controlDevice(int id) async {
+    final payload = _payloadControllers[id]?.text ?? "";
+
     final response = await http.post(
       Uri.parse('$_baseUrl/devices/$id/control'),
       headers: {'Content-Type': 'text/plain'},
-      body: _payloadController.text,
+      body: payload,
     );
 
     if (response.statusCode == 200) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Lệnh điều khiển đã gửi')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Lệnh đã được gửi')),
+      );
     }
   }
 
   // ====================== FETCH TELEMETRY ======================
   Future<List<Telemetry>> fetchTelemetry(int deviceId) async {
     try {
-      final response = await http.get(
-        Uri.parse('$_baseUrl/telemetry/$deviceId'),
-      );
+      final response =
+          await http.get(Uri.parse('$_baseUrl/telemetry/$deviceId'));
 
       if (response.statusCode == 200) {
         final List list = json.decode(response.body);
@@ -107,14 +112,14 @@ class _IoTDeviceDashboardState extends State<IoTDeviceDashboard> {
     return [];
   }
 
-  // ====================== TELEMETRY DIALOG ======================
+  // ====================== TELEMETRY POPUP ======================
   Future<void> _showTelemetryDialog(int deviceId, String deviceName) async {
     List<Telemetry> telemetries = await fetchTelemetry(deviceId);
 
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text('Telemetry - $deviceName'),
+        title: Text('Dữ liệu - $deviceName'),
         content: SizedBox(
           width: double.maxFinite,
           child: telemetries.isEmpty
@@ -135,7 +140,7 @@ class _IoTDeviceDashboardState extends State<IoTDeviceDashboard> {
           TextButton(
             onPressed: () => Navigator.pop(context),
             child: const Text('Đóng'),
-          ),
+          )
         ],
       ),
     );
@@ -150,7 +155,7 @@ class _IoTDeviceDashboardState extends State<IoTDeviceDashboard> {
         centerTitle: true,
       ),
       body: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(14),
         child: ListView(
           children: [
             const Text(
@@ -158,18 +163,55 @@ class _IoTDeviceDashboardState extends State<IoTDeviceDashboard> {
               style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
             ),
 
-            // DEVICE LIST
+            const SizedBox(height: 10),
+
+            // DEVICE CARDS
             ..._devices.map(
               (d) => Card(
-                color: Colors.blue.shade50,
-                child: ListTile(
-                  title: Text(d.name),
-                  subtitle: Text(d.topic),
-                  trailing: ElevatedButton(
-                    onPressed: () => controlDevice(d.id),
-                    child: const Text('Gửi lệnh'),
+                elevation: 3,
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12)),
+                child: Padding(
+                  padding: const EdgeInsets.all(14),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(d.name,
+                          style: const TextStyle(
+                              fontSize: 18, fontWeight: FontWeight.bold)),
+                      Text("MQTT Topic: ${d.topic}"),
+
+                      const SizedBox(height: 10),
+
+                      // PAYLOAD
+                      TextField(
+                        controller: _payloadControllers[d.id],
+                        decoration: const InputDecoration(
+                            hintText: 'Lệnh điều khiển'),
+                      ),
+
+                      const SizedBox(height: 10),
+
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          // Gửi lệnh
+                          ElevatedButton.icon(
+                            onPressed: () => controlDevice(d.id),
+                            icon: const Icon(Icons.send),
+                            label: const Text("Gửi lệnh"),
+                          ),
+
+                          // Xem dữ liệu
+                          TextButton(
+                            onPressed: () =>
+                                _showTelemetryDialog(d.id, d.name),
+                            child: const Text("Xem dữ liệu"),
+                          ),
+                        ],
+                      )
+                    ],
                   ),
-                  onTap: () => _showTelemetryDialog(d.id, d.name),
                 ),
               ),
             ),
@@ -189,21 +231,10 @@ class _IoTDeviceDashboardState extends State<IoTDeviceDashboard> {
               controller: _deviceTopicController,
               decoration: const InputDecoration(labelText: 'Topic MQTT'),
             ),
+            const SizedBox(height: 10),
             ElevatedButton(
               onPressed: createDevice,
               child: const Text('Tạo thiết bị'),
-            ),
-
-            const SizedBox(height: 20),
-
-            // CONTROL INPUT
-            const Text(
-              '🎮 Nhập lệnh điều khiển',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-            ),
-            TextField(
-              controller: _payloadController,
-              decoration: const InputDecoration(hintText: '{data:20}'),
             ),
           ],
         ),
@@ -221,7 +252,11 @@ class Device {
   Device({required this.id, required this.name, required this.topic});
 
   factory Device.fromJson(Map<String, dynamic> json) {
-    return Device(id: json['id'], name: json['name'], topic: json['topic']);
+    return Device(
+      id: json['id'],
+      name: json['name'],
+      topic: json['topic'],
+    );
   }
 }
 
