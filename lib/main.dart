@@ -23,7 +23,7 @@ class IoTDeviceDashboard extends StatefulWidget {
 }
 
 class _IoTDeviceDashboardState extends State<IoTDeviceDashboard> {
-  final _baseUrl = 'http://192.168.100.119:8080'; // đổi theo IP backend
+  final _baseUrl = 'http://172.20.10.3:8080'; // đổi theo IP backend
   List<Device> _devices = [];
 
   final _deviceNameController = TextEditingController();
